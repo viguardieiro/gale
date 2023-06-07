@@ -71,7 +71,9 @@ class TestMapper:
     def test_bootstrap(self):
         """Tests bootstrap parameter finding"""
         self.PARAMS = bootstrap_mapper_params(
-            self.X, self.preds, [10, 20, 30], [0.2, 0.3, 0.4], [0.2, 0.3, 0.4]
+            self.explanations, self.preds, 
+            [10, 20, 30], [0.2, 0.3, 0.4], [0.2, 0.3, 0.4],
+            seed=2023
         )
         print(self.PARAMS)
         assert type(self.PARAMS) == dict
