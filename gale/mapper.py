@@ -8,7 +8,6 @@ from gudhi.cover_complex import MapperComplex
 
 from sklearn.cluster import AgglomerativeClustering
 
-
 def create_mapper(
     X: np.ndarray,
     f: np.ndarray,
@@ -43,7 +42,7 @@ def create_mapper(
     return mapper
 
 
-def create_pd(mapper: MapperComplex) -> list:
+def create_pd(mapper: MapperComplex, return_d=False) -> list:
     """Creates a persistence diagram from Mapper output.
 
     Args:
@@ -63,7 +62,10 @@ def create_pd(mapper: MapperComplex) -> list:
     pdgms = []
     for dgm in dgms:
         pdgms += [d[1] for d in dgm]
-    return pdgms
+    if return_d:
+        return dgms, pdgms
+    else:
+        return pdgms
 
 
 def bottleneck_distance(mapper_a: MapperComplex, mapper_b: MapperComplex) -> float:
