@@ -85,8 +85,11 @@ def bottleneck_distance(mapper_a: MapperComplex, mapper_b: MapperComplex) -> flo
 
 # Sub function to run the bootstrap sequence
 def _bootstrap_sub(params):
-    M = create_mapper(
-        X=params[0],
+    # Fix random seed to use the same bootstrap samples for all parameters
+    if params[7] is not None:
+        np.random.seed(params[7])
+
+    M = create_mapper(X=params[0],
         f=params[1],
         resolution=params[2],
         gain=params[3],
@@ -101,16 +104,21 @@ def _bootstrap_sub(params):
         Xboot = params[0][idxs, :]
         fboot = params[1][idxs]
         # Fit mapper
-        M_boot = create_mapper(Xboot, fboot, params[2], params[3], params[4], params[5])
-        G_boot = mapper_to_networkx(M_boot)
+        M_boot = create_mapper(Xboot, fboot, 
+                                resolution=params[2],
+                                gain=params[3],
+                                dist_thresh=params[4],
+                                clusterer=params[5])
+        distribution.append(bottleneck_distance(M_boot, M))
+        G_boot = M_boot.get_networkx(set_attributes_from_colors=True)
         G_cc = nx.number_connected_components(G_boot)
         cc.append(G_cc)
-        distribution.append(bottleneck_distance(M_boot, M))
+        
     distribution = np.sort(distribution)
-    dist_thresh = distribution[int(params[6] * len(distribution))]
+    distribution_thresh = distribution[int(params[6] * len(distribution))]
     cc = np.sort(cc)
     cc_thresh = cc[int(params[6] * len(cc))]
-    return params[2], params[3], params[4], dist_thresh, cc_thresh
+    return params[2], params[3], params[4], distribution_thresh, cc_thresh
 
 
 def bootstrap_mapper_params(
@@ -123,6 +131,7 @@ def bootstrap_mapper_params(
     ci=0.95,
     n=30,
     n_jobs=1,
+    seed=None
 ) -> MapperComplex:
     """Bootstraps the data to figure out the best Mapper parameters through a greedy search.
 
@@ -143,7 +152,7 @@ def bootstrap_mapper_params(
     # Create parameter list
     paramlist = list(
         itertools.product(
-            [X], [f], resolutions, gains, distances, [clusterer], [ci], [n]
+            [X], [f], resolutions, gains, distances, [clusterer], [ci], [n], [seed]
         )
     )
 
