@@ -10,6 +10,7 @@ from gale import (
     mapper_to_networkx,
 )
 
+from gudhi.cover_complex import MapperComplex
 from sklearn.datasets import make_classification
 from sklearn.linear_model import LogisticRegression
 from lime.lime_tabular import LimeTabularExplainer
@@ -42,14 +43,18 @@ class TestMapper:
             lime_exp.append(tmp)
 
         self.explanations = np.array(lime_exp)
-        self.M = create_mapper(self.explanations, self.preds, 10, 0.3, 0.5)
+        self.M = create_mapper(self.explanations, self.preds, 
+                               resolution=10, 
+                               gain=0.3)
 
     def test_mapper(self):
         """Tests Mapper creation"""
-        assert type(self.M) == dict
-        assert "nodes" in self.M.keys()
-        assert "links" in self.M.keys()
-        assert "node_attr" in self.M.keys()
+        assert type(self.M) == MapperComplex
+        params = self.M.get_params()
+        assert params['input_type'] == 'point cloud'
+        assert type(params['resolutions']) == np.ndarray
+        assert type(params['gains']) == np.ndarray
+        assert type(params['colors']) == np.ndarray
 
     def test_pd(self):
         """Tests persistence diagram"""
