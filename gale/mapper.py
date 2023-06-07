@@ -1,9 +1,10 @@
-import gudhi as gd
 import itertools
-import kmapper as km
 import multiprocessing
 import networkx as nx
 import numpy as np
+
+import gudhi as gd
+from gudhi.cover_complex import MapperComplex
 
 from sklearn.cluster import AgglomerativeClustering
 
@@ -13,9 +14,10 @@ def create_mapper(
     f: np.ndarray,
     resolution: int,
     gain: float,
-    dist_thresh: float,
+    dist_thresh=None,
     clusterer=AgglomerativeClustering(n_clusters=None, linkage="single"),
-) -> dict:
+    min_points_per_node=5
+) -> MapperComplex:
     """Runs Mapper on given some data, a filter function, and resolution + gain parameters.
 
     Args:
@@ -27,55 +29,49 @@ def create_mapper(
         clusterer (sklearn.base.ClusterMixin, optional): Clustering method from sklearn. Defaults to AgglomerativeClustering(n_clusters=None, linkage="single").
 
     Returns:
-        dict: Dictionary containing the Mapper output
+        MapperComplex: MapperComplex object
     """
-    mapper = km.KeplerMapper(verbose=0)
-    cover = km.Cover(resolution, gain)
-    clusterer.distance_threshold = (X.max() - X.min()) * dist_thresh
-    graph = mapper.map(lens=f, X=X, clusterer=clusterer, cover=cover)
-    graph["node_attr"] = {}
-    for cluster in graph["nodes"]:
-        graph["node_attr"][cluster] = np.mean(f[graph["nodes"][cluster]])
-    return graph
+    if dist_thresh is None:
+        mapper = MapperComplex(input_type="point cloud")
+        dist_thresh = mapper.estimate_scale(X, 100)
+
+    clusterer.distance_threshold = dist_thresh
+    mapper = MapperComplex(input_type="point cloud", min_points_per_node=min_points_per_node,
+                           clustering=clusterer,
+                           resolutions=[resolution], gains=[gain])
+    mapper.fit(X, filters=f, colors=f)
+    return mapper
 
 
-def create_pd(mapper: dict) -> list:
+def create_pd(mapper: MapperComplex) -> list:
     """Creates a persistence diagram from Mapper output.
 
     Args:
-        mapper (dict): Mapper output from `create_mapper`
+        mapper (MapperComplex): Mapper output from `create_mapper`
 
     Returns:
         list: List of the topographical features
     """
-    st = gd.SimplexTree()
-    node_idx = {}
-    for i, n in enumerate(mapper["nodes"].keys()):
-        node_idx[n] = i
-        st.insert([i])
-    for origin in mapper["links"]:
-        edges = mapper["links"][origin]
-        for e in edges:
-            if e != origin:
-                st.insert([node_idx[origin], node_idx[e]])
-    attrs = {node_idx[k]: mapper["node_attr"][k] for k in mapper["nodes"].keys()}
-    for k, v in attrs.items():
-        st.assign_filtration([k], v)
+    st = mapper.simplex_tree_.copy()
+    G = mapper.get_networkx(set_attributes_from_colors=True)
+    filtration = nx.get_node_attributes(G, "attr_name")
+    for k in filtration.keys():
+        st.assign_filtration([k], filtration[k][0])
     st.make_filtration_non_decreasing()
     st.extend_filtration()
-    dgms = st.extended_persistence(min_persistence=1e-5)
+    dgms = st.extended_persistence()
     pdgms = []
     for dgm in dgms:
         pdgms += [d[1] for d in dgm]
     return pdgms
 
 
-def bottleneck_distance(mapper_a: dict, mapper_b: dict) -> float:
+def bottleneck_distance(mapper_a: MapperComplex, mapper_b: MapperComplex) -> float:
     """Calculates the bottleneck distance between two Mapper outputs (denoted A and B)
 
     Args:
-        mapper_a (dict): Mapper A, from `create_mapper`
-        mapper_b (dict): Mapper B, from `create_mapper`
+        mapper_a (MapperComplex): Mapper A, from `create_mapper`
+        mapper_b (MapperComplex): Mapper B, from `create_mapper`
 
     Returns:
         float: the bottleneck distance
@@ -125,7 +121,7 @@ def bootstrap_mapper_params(
     ci=0.95,
     n=30,
     n_jobs=1,
-) -> dict:
+) -> MapperComplex:
     """Bootstraps the data to figure out the best Mapper parameters through a greedy search.
 
     Args:
@@ -140,7 +136,7 @@ def bootstrap_mapper_params(
         n_jobs (int, optional): Number of processes for multiprocessing. Defaults to CPU count. -1 for all cores.
 
     Returns:
-        dict: Dictionary containing the Mapper parameters found in a greedy search
+        MapperComplex: Dictionary containing the Mapper parameters found in a greedy search
     """
     # Create parameter list
     paramlist = list(
@@ -203,28 +199,15 @@ def bootstrap_mapper_params(
     }
 
 
-def mapper_to_networkx(mapper: dict) -> nx.classes.graph.Graph:
-    """Takes the Mapper output (which is a `dict`) and transforms it to a networkx graph.
+def mapper_to_networkx(mapper: MapperComplex) -> nx.classes.graph.Graph:
+    """Takes the Mapper output and transforms it to a networkx graph.
 
     Args:
-        mapper (dict): Mapper output from `create_mapper`
+        mapper (MapperComplex): Mapper output from `create_mapper`
 
     Returns:
         nx.classes.graph.Graph: Networkx graph produced by the Mapper output.
     """
-    G = nx.Graph()
-    node_idx = {}
-    for i, n in enumerate(mapper["nodes"].keys()):
-        node_idx[n] = i
-        G.add_node(i)
-    for origin in mapper["links"]:
-        edges = mapper["links"][origin]
-        for e in edges:
-            if e != origin:
-                G.add_edge(node_idx[origin], node_idx[e])
-    attrs = {
-        node_idx[k]: {"avg_pred": mapper["node_attr"][k]}
-        for k in mapper["nodes"].keys()
-    }
-    nx.set_node_attributes(G, attrs)
+    G = mapper.get_networkx(set_attributes_from_colors=True)
+
     return G
