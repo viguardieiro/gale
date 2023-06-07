@@ -11,8 +11,7 @@ setup(
     # Project uses reStructuredText, so ensure that the docutils get
     # installed or upgraded on the target machine
     install_requires=[
-        "gudhi>=3.4.1.post1",
-        "kmapper>=2.0.1",
+        "gudhi>=3.8.0",
         "numpy>=1.19.5",
         "networkx>=2.6.3",
         "scikit-learn>=0.24.2",
