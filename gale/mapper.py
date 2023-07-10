@@ -14,6 +14,8 @@ def create_mapper(
     resolution: int,
     gain: float,
     dist_thresh=None,
+    estimate_scale_N=100,
+    estimate_scale_beta=0.001,
     clusterer=AgglomerativeClustering(n_clusters=None, linkage="single"),
     min_points_per_node=5
 ) -> MapperComplex:
@@ -32,7 +34,7 @@ def create_mapper(
     """
     if dist_thresh is None:
         mapper = MapperComplex(input_type="point cloud")
-        dist_thresh = mapper.estimate_scale(X, 100)
+        dist_thresh = mapper.estimate_scale(X, N=estimate_scale_N, beta=estimate_scale_beta)
 
     clusterer.distance_threshold = dist_thresh
     mapper = MapperComplex(input_type="point cloud", min_points_per_node=min_points_per_node,
