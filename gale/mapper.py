@@ -82,6 +82,41 @@ def bottleneck_distance(mapper_a: MapperComplex, mapper_b: MapperComplex) -> flo
     pd_b = create_pd(mapper_b)
     return gd.bottleneck_distance(pd_a, pd_b)
 
+def bootstrap_stability(X, f, resolution, gain, dist_thresh, min_points_per_node=5, mapper=None, n=100, ci=0.95, seed=None):
+    if seed is not None:
+        np.random.seed(seed)
+
+    n_samples = len(X)
+
+    if mapper is None:
+        mapper = MapperComplex(input_type="point cloud", min_points_per_node=min_points_per_node,
+                            clustering=AgglomerativeClustering(n_clusters=None, linkage="single", distance_threshold=dist_thresh),
+                            resolutions=[resolution], gains=[gain])
+        mapper.fit(X, filters=f, colors=f)
+
+    mapper_boot = MapperComplex(input_type="point cloud", min_points_per_node=min_points_per_node,
+                            clustering=AgglomerativeClustering(n_clusters=None, linkage="single", distance_threshold=dist_thresh),
+                            resolutions=[resolution], gains=[gain])
+
+    stability, cc = [], []
+    for bootstrap in range(n):
+        idxs = np.random.choice(n_samples, size=n_samples, replace=True)
+        Xboot = X[idxs, :]
+        fboot = f[idxs]
+
+        mapper_boot.fit(Xboot, filters=fboot, colors=fboot)
+        G_boot = mapper_boot.get_networkx(set_attributes_from_colors=True)
+        G_cc = nx.number_connected_components(G_boot)
+        stability.append(bottleneck_distance(mapper_boot, mapper))
+        cc.append(G_cc)
+
+    stability = np.sort(stability)
+    stab_thresh = stability[int(ci * len(stability))]
+    cc = np.sort(cc)
+    cc_thresh = cc[int(ci * len(cc))]
+
+    return stability, stab_thresh, cc, cc_thresh
+
 
 # Sub function to run the bootstrap sequence
 def _bootstrap_sub(params):
