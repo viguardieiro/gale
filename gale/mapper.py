@@ -84,58 +84,23 @@ def bottleneck_distance(mapper_a: MapperComplex, mapper_b: MapperComplex) -> flo
     pd_b = create_pd(mapper_b)
     return gd.bottleneck_distance(pd_a, pd_b)
 
-def bootstrap_stability(X, f, resolution, gain, dist_thresh, min_points_per_node=5, mapper=None, n=100, ci=0.95, seed=None):
-    if seed is not None:
-        np.random.seed(seed)
-
-    n_samples = len(X)
-
-    if mapper is None:
-        mapper = MapperComplex(input_type="point cloud", min_points_per_node=min_points_per_node,
-                            clustering=AgglomerativeClustering(n_clusters=None, linkage="single", distance_threshold=dist_thresh),
-                            resolutions=[resolution], gains=[gain])
-        mapper.fit(X, filters=f, colors=f)
-
-    mapper_boot = MapperComplex(input_type="point cloud", min_points_per_node=min_points_per_node,
-                            clustering=AgglomerativeClustering(n_clusters=None, linkage="single", distance_threshold=dist_thresh),
-                            resolutions=[resolution], gains=[gain])
-
-    stability, cc = [], []
-    for bootstrap in range(n):
-        idxs = np.random.choice(n_samples, size=n_samples, replace=True)
-        Xboot = X[idxs, :]
-        fboot = f[idxs]
-
-        mapper_boot.fit(Xboot, filters=fboot, colors=fboot)
-        G_boot = mapper_boot.get_networkx(set_attributes_from_colors=True)
-        G_cc = nx.number_connected_components(G_boot)
-        stability.append(bottleneck_distance(mapper_boot, mapper))
-        cc.append(G_cc)
-
-    stability = np.sort(stability)
-    stab_thresh = stability[int(ci * len(stability))]
-    cc = np.sort(cc)
-    cc_thresh = cc[int(ci * len(cc))]
-
-    return stability, stab_thresh, cc, cc_thresh
-
-
 # Sub function to run the bootstrap sequence
 def _bootstrap_sub(params):
     # Fix random seed to use the same bootstrap samples for all parameters
-    if params[7] is not None:
-        np.random.seed(params[7])
+    if params[9] is not None:
+        np.random.seed(params[9])
 
     M = create_mapper(X=params[0],
         f=params[1],
         resolution=params[2],
         gain=params[3],
         dist_thresh=params[4],
-        clusterer=params[5],
+        min_points_per_node=params[5],
+        clusterer=params[6]
     )
     n_samples = params[0].shape[0]
     distribution, cc = [], []
-    for bootstrap in range(params[7]):
+    for bootstrap in range(params[8]):
         # Randomly select points with replacement
         idxs = np.random.choice(n_samples, size=n_samples, replace=True)
         Xboot = params[0][idxs, :]
@@ -145,16 +110,18 @@ def _bootstrap_sub(params):
                                 resolution=params[2],
                                 gain=params[3],
                                 dist_thresh=params[4],
-                                clusterer=params[5])
+                                min_points_per_node=params[5],
+                                clusterer=params[6]
+                                )
         distribution.append(bottleneck_distance(M_boot, M))
         G_boot = M_boot.get_networkx(set_attributes_from_colors=True)
         G_cc = nx.number_connected_components(G_boot)
         cc.append(G_cc)
         
     distribution = np.sort(distribution)
-    distribution_thresh = distribution[int(params[6] * len(distribution))]
+    distribution_thresh = distribution[int(params[7] * len(distribution))]
     cc = np.sort(cc)
-    cc_thresh = cc[int(params[6] * len(cc))]
+    cc_thresh = cc[int(params[7] * len(cc))]
     return params[2], params[3], params[4], distribution_thresh, cc_thresh
 
 
@@ -165,10 +132,12 @@ def bootstrap_mapper_params(
     gains: list,
     distances: list,
     clusterer=AgglomerativeClustering(n_clusters=None, linkage="single"),
+    min_points_per_node=[5],
     ci=0.95,
     n=30,
     n_jobs=1,
-    seed=None
+    seed=None,
+    selection_type='min_stability'
 ) -> MapperComplex:
     """Bootstraps the data to figure out the best Mapper parameters through a greedy search.
 
@@ -179,9 +148,12 @@ def bootstrap_mapper_params(
         gains (list): List of gains to test.
         distances (list): If using AgglomerativeClustering, this sets the distance threshold as (X.max() - X.min())*thresh.
         clusterer (sklearn.base.ClusterMixin, optional): Clustering method from sklearn. Defaults to AgglomerativeClustering(n_clusters=None, linkage="single").
+        min_points_per_node (list): List of min points per node to test.
         ci (float, optional): Confidence interval to create. Defaults to 0.95.
         n (int, optional): Number of bootstraps to run. Defaults to 30.
         n_jobs (int, optional): Number of processes for multiprocessing. Defaults to CPU count. -1 for all cores.
+        seed (int, optional): Random seed for boostrap samples.
+        selection_type: Method to pick the best params. Options are 'min_stability' (default) or 'min_distance'.
 
     Returns:
         MapperComplex: Dictionary containing the Mapper parameters found in a greedy search
@@ -189,7 +161,7 @@ def bootstrap_mapper_params(
     # Create parameter list
     paramlist = list(
         itertools.product(
-            [X], [f], resolutions, gains, distances, [clusterer], [ci], [n], [seed]
+            [X], [f], resolutions, gains, distances, min_points_per_node, [clusterer], [ci], [n], [seed]
         )
     )
 
@@ -218,25 +190,39 @@ def bootstrap_mapper_params(
         gain.append(res[1])
         distance.append(res[2])
 
-    # Find min/max for stability and components, for scaling purposes
-    min_distance = 999
-    min_stability = min(stability)
-    max_stability = max(stability)
-    min_component = min(component)
-    max_component = max(component)
+    if selection_type=='min_stability':
+        best_stability = min(stability)
+        index = stability.index(best_stability)
+        best_component = component[index]
+        best_r = resolution[index]
+        best_g = gain[index]
+        best_d = distance[index]
 
-    # Calculate distance to (0,0) and take the smallest
-    for s, c, r, g, d in zip(stability, component, resolution, gain, distance):
-        stab = (s - min_stability) / (max_stability - min_stability)
-        comp = (c - min_component) / (max_component - min_component)
-        dist = np.sqrt(stab**2 + comp**2)
-        if dist < min_distance:
-            min_distance = dist
-            best_stability = s
-            best_component = c
-            best_r = r
-            best_g = g
-            best_d = d
+    elif selection_type=='min_distance':
+        # Find min/max for stability and components, for scaling purposes
+        min_distance = 999
+        min_stability = min(stability)
+        max_stability = max(stability)
+        min_component = min(component)
+        max_component = max(component)
+
+        # Calculate distance to (0,0) and take the smallest
+        for s, c, r, g, d in zip(stability, component, resolution, gain, distance):
+            if max_stability == min_stability:
+                stab = 0
+            else:
+                stab = (s - min_stability) / (max_stability - min_stability)
+            if max_component == min_component:
+                comp = 0
+            else:
+                comp = (c - min_component) / (max_component - min_component)
+            dist = np.sqrt(stab**2 + comp**2)
+            if dist < min_distance:
+                best_stability = s
+                best_component = c
+                best_r = r
+                best_g = g
+                best_d = d
 
     return {
         "stability": best_stability,
