@@ -17,7 +17,7 @@ def create_mapper(
     estimate_scale_N=100,
     estimate_scale_beta=0.001,
     clusterer=AgglomerativeClustering(n_clusters=None, linkage="single"),
-    min_points_per_node=5
+    min_points_per_node=0
 ) -> MapperComplex:
     """Runs Mapper on given some data, a filter function, and resolution + gain parameters.
 
@@ -26,8 +26,11 @@ def create_mapper(
         f (np.ndarray): Filter (lens) function. For GALE, the predicted probabilities are the lens function.
         resolution (int): Resolution (how wide each window is)
         gain (float): Gain (how much overlap between windows)
-        dist_thresh (float): If using AgglomerativeClustering, this sets the distance threshold as (X.max() - X.min())*thresh. Ignored if clusterer is not AgglomerativeClustering
+        dist_thresh (float): If using AgglomerativeClustering, this sets the distance threshold. Ignored if clusterer is not AgglomerativeClustering. If dist_thresh is None, then the distance threshold is estimated using the estimate_scale_N and estimate_scale_beta parameters.
+        estimate_scale_N (int): Number of runs to estimate the distance threshold. Ignored if dist_thresh is not None. See MapperComplex.estimate_scale for more details.
+        estimate_scale_beta (float): Beta parameter for estimating the distance threshold. Ignored if dist_thresh is not None. See MapperComplex.estimate_scale for more details.
         clusterer (sklearn.base.ClusterMixin, optional): Clustering method from sklearn. Defaults to AgglomerativeClustering(n_clusters=None, linkage="single").
+        min_points_per_node (int, optional): Minimum number of points per node. Defaults to 0.
 
     Returns:
         MapperComplex: MapperComplex object
@@ -132,7 +135,7 @@ def bootstrap_mapper_params(
     gains: list,
     distances: list,
     clusterer=AgglomerativeClustering(n_clusters=None, linkage="single"),
-    min_points_per_node=[5],
+    min_points_per_node=[0],
     ci=0.95,
     n=30,
     n_jobs=1,
