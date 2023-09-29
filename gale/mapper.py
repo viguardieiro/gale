@@ -17,7 +17,8 @@ def create_mapper(
     estimate_scale_N=100,
     estimate_scale_beta=0.001,
     clusterer=AgglomerativeClustering(n_clusters=None, linkage="single"),
-    min_points_per_node=0
+    min_points_per_node=0,
+    colors=None,
 ) -> MapperComplex:
     """Runs Mapper on given some data, a filter function, and resolution + gain parameters.
 
@@ -31,6 +32,7 @@ def create_mapper(
         estimate_scale_beta (float): Beta parameter for estimating the distance threshold. Ignored if dist_thresh is not None. See MapperComplex.estimate_scale for more details.
         clusterer (sklearn.base.ClusterMixin, optional): Clustering method from sklearn. Defaults to AgglomerativeClustering(n_clusters=None, linkage="single").
         min_points_per_node (int, optional): Minimum number of points per node. Defaults to 0.
+        colors (np.ndarray, optional): Function values to color mapper nodes. Defaults to f.
 
     Returns:
         MapperComplex: MapperComplex object
@@ -43,7 +45,10 @@ def create_mapper(
     mapper = MapperComplex(input_type="point cloud", min_points_per_node=min_points_per_node,
                            clustering=clusterer,
                            resolutions=[resolution], gains=[gain])
-    mapper.fit(X, filters=f, colors=f)
+    if colors is None:
+        colors = f
+
+    mapper.fit(X, filters=f, colors=colors)
     return mapper
 
 
