@@ -6,20 +6,38 @@ from matplotlib.offsetbox import AnchoredText
 import networkx as nx
 
 
-def plot_mapper(mapper: MapperComplex, add_text=True, ax=None):
+def plot_mapper(mapper: MapperComplex, 
+                add_text=True, 
+                ax=None,
+                node_scale=1.0,
+                node_position='kamada_kawai'):
+    """Plots the Mapper output as a networkx graph
+
+    Args:
+        mapper (MapperComplex): Mapper output from `create_mapper`
+        add_text (bool, optional): Add text with number of components and nodes. Defaults to True.
+        ax (matplotlib.axes.Axes, optional): Matplotlib axes. Defaults to creating a new axis.
+        node_scale (float, optional): Scale the node size. Defaults to 1.0.
+        node_position (str, optional): Networkx layout. Defaults to 'kamada_kawai'.
+    """
     G = mapper.get_networkx(set_attributes_from_colors=True)
 
     nodes = list(G.nodes)
     node_info = mapper.node_info_
     node_color = [node_info[k]["colors"][0] for k in nodes]
-    node_size = [node_info[k]["size"] for k in nodes]
+    node_size = [node_scale*node_info[k]["size"] for k in nodes]
 
     if ax is None:
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
 
+    if node_position == 'kamada_kawai':
+        pos = nx.kamada_kawai_layout(G)
+    elif node_position == 'spring':
+        pos = nx.spring_layout(G)
+
     nx.draw(G, with_labels=False, ax=ax, 
-            pos=nx.kamada_kawai_layout(G),
+            pos=pos,
             node_color=node_color, node_size=node_size, 
             edge_color='grey', width=0.5, cmap='coolwarm')
 
@@ -35,7 +53,15 @@ def plot_mapper(mapper: MapperComplex, add_text=True, ax=None):
 
     return fig, ax
 
-def plot_ext_persistance_diagram(mapper: MapperComplex, ax=None):
+def plot_ext_persistance_diagram(mapper: MapperComplex, 
+                                 ax=None):
+    """Plots the extended persistence diagram of the Mapper output
+
+    Args:
+        mapper (MapperComplex): Mapper output from `create_mapper`
+        ax (matplotlib.axes.Axes, optional): Matplotlib axes. Defaults to creating a new axis.
+    """
+    
     types = ["Down branch","Upper branch","Trunk","Holes"]
 
     dgms, pdgms = create_pd(mapper, return_d=True)
