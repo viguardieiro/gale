@@ -6,7 +6,7 @@ from matplotlib.offsetbox import AnchoredText
 import networkx as nx
 
 
-def plot_mapper(mapper: MapperComplex, verbose=True):
+def plot_mapper(mapper: MapperComplex, add_text=True, ax=None):
     G = mapper.get_networkx(set_attributes_from_colors=True)
 
     nodes = list(G.nodes)
@@ -14,15 +14,16 @@ def plot_mapper(mapper: MapperComplex, verbose=True):
     node_color = [node_info[k]["colors"][0] for k in nodes]
     node_size = [node_info[k]["size"] for k in nodes]
 
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
 
     nx.draw(G, with_labels=False, ax=ax, 
             pos=nx.kamada_kawai_layout(G),
             node_color=node_color, node_size=node_size, 
             edge_color='grey', width=0.5, cmap='coolwarm')
 
-    if verbose:
+    if add_text:
         cc = nx.number_connected_components(G)
         n_nodes = len(nodes)
         at = AnchoredText(f"components = {cc}\nnodes = {n_nodes}", loc='lower left', prop=dict(size=10), frameon=False)
@@ -34,13 +35,14 @@ def plot_mapper(mapper: MapperComplex, verbose=True):
 
     return fig, ax
 
-def plot_ext_persistance_diagram(mapper: MapperComplex):
+def plot_ext_persistance_diagram(mapper: MapperComplex, ax=None):
     types = ["Down branch","Upper branch","Trunk","Holes"]
 
     dgms, pdgms = create_pd(mapper, return_d=True)
 
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
 
     for type_i in range(4):
             type_s = types[type_i]
