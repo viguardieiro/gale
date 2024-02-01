@@ -5,3 +5,11 @@ This version of GALE's Python library uses the [GUDHI library](https://gudhi.inr
 The main advantage of using GUDHI's mapper is the automatic estimation of the distance threshold parameter for the clustering, significantly reducing the execution time for selecting the mapper parameters.
 
 This version also introduces two functions for plotting images relevant to analyzing GALE's results: the mapper (`plot_mapper`) and the persistence diagram (`plot_ext_persistance_diagram`).
+
+## Instalation
+
+You can easily install this version of GALE by cloning this repository and running the following command while inside the repository main folder:
+
+```
+pip install .
+```
